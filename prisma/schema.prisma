@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum WorkflowType {
+  TEXT_SUMMARIZATION
+  PROFESSIONAL_REWRITE
+  TASK_BREAKDOWN
+  GITHUB_ISSUE_ANALYSIS
+  MEETING_NOTES_EXTRACTION
+}
+
+enum WorkflowStatus {
+  DRAFT
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum ExecutionStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model Workflow {
+  id           String         @id @default(cuid())
+  title        String
+  type         WorkflowType
+  input        String         @db.Text
+  latestOutput String?        @db.Text
+  status       WorkflowStatus @default(DRAFT)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  executions   WorkflowExecution[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model WorkflowExecution {
+  id           String          @id @default(cuid())
+  workflowId   String
+  workflow     Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  input        String          @db.Text
+  output       String?         @db.Text
+  status       ExecutionStatus
+  errorMessage String?
+  startedAt    DateTime
+  completedAt  DateTime?
+  createdAt    DateTime        @default(now())
+
+  @@index([workflowId])
+}
