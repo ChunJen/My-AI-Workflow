@@ -7,6 +7,7 @@ export type WorkflowType =
 
 export type WorkflowStatus = "DRAFT" | "RUNNING" | "COMPLETED" | "FAILED";
 export type ExecutionStatus = "RUNNING" | "COMPLETED" | "FAILED";
+export type AIProvider = "ANTHROPIC" | "OPENAI" | "GEMINI";
 
 export const WORKFLOW_TYPE_LABELS: Record<WorkflowType, string> = {
   TEXT_SUMMARIZATION: "Text Summarization",
@@ -14,6 +15,18 @@ export const WORKFLOW_TYPE_LABELS: Record<WorkflowType, string> = {
   TASK_BREAKDOWN: "Task Breakdown",
   GITHUB_ISSUE_ANALYSIS: "GitHub Issue Analysis",
   MEETING_NOTES_EXTRACTION: "Meeting Notes Extraction",
+};
+
+export const AI_PROVIDER_LABELS: Record<AIProvider, string> = {
+  ANTHROPIC: "Anthropic Claude",
+  OPENAI: "OpenAI GPT",
+  GEMINI: "Google Gemini",
+};
+
+export const AI_PROVIDER_MODELS: Record<AIProvider, string> = {
+  ANTHROPIC: "claude-sonnet-4-6",
+  OPENAI: "gpt-4o-mini",
+  GEMINI: "gemini-2.0-flash",
 };
 
 export interface Workflow {
@@ -34,6 +47,7 @@ export interface WorkflowExecution {
   input: string;
   output: string | null;
   status: ExecutionStatus;
+  provider: AIProvider;
   errorMessage: string | null;
   startedAt: string;
   completedAt: string | null;

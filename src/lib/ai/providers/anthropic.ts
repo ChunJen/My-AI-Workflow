@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({
-  apiKey: process.env.AI_API_KEY,
+  apiKey: process.env.ANTHROPIC_API_KEY ?? process.env.AI_API_KEY,
 });
 
 export async function callAI(
@@ -19,8 +19,7 @@ export async function callAI(
 
   const content = message.content[0];
   if (content.type !== "text") {
-    throw new Error("Unexpected response type from AI provider");
+    throw new Error("Unexpected response type from Anthropic");
   }
-
   return content.text;
 }

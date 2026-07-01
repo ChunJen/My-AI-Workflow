@@ -1,5 +1,6 @@
 import type { WorkflowExecution } from "@/types/workflow";
 import { StatusBadge } from "@/components/StatusBadge";
+import { AI_PROVIDER_LABELS, AI_PROVIDER_MODELS } from "@/types/workflow";
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleString(undefined, {
@@ -31,9 +32,12 @@ export function ExecutionHistory({ executions }: ExecutionHistoryProps) {
     <div className="divide-y divide-zinc-100">
       {executions.map((ex) => (
         <div key={ex.id} className="py-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
               <StatusBadge status={ex.status} />
+              <span className="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700">
+                {AI_PROVIDER_LABELS[ex.provider]} · {AI_PROVIDER_MODELS[ex.provider]}
+              </span>
               <span className="text-sm text-zinc-500">
                 {formatDate(ex.createdAt)}
               </span>

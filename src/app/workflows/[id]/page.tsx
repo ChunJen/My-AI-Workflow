@@ -7,7 +7,27 @@ import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ExecutionHistory } from "@/components/ExecutionHistory";
-import { WORKFLOW_TYPE_LABELS, type Workflow } from "@/types/workflow";
+import {
+  WORKFLOW_TYPE_LABELS,
+  AI_PROVIDER_LABELS,
+  AI_PROVIDER_MODELS,
+  type Workflow,
+  type AIProvider,
+} from "@/types/workflow";
+
+const PROVIDERS: AIProvider[] = ["ANTHROPIC", "OPENAI", "GEMINI"];
+
+const PROVIDER_COLORS: Record<AIProvider, string> = {
+  ANTHROPIC: "border-orange-300 bg-orange-50 text-orange-800",
+  OPENAI: "border-emerald-300 bg-emerald-50 text-emerald-800",
+  GEMINI: "border-blue-300 bg-blue-50 text-blue-800",
+};
+
+const PROVIDER_SELECTED: Record<AIProvider, string> = {
+  ANTHROPIC: "border-orange-500 bg-orange-100 ring-2 ring-orange-400",
+  OPENAI: "border-emerald-500 bg-emerald-100 ring-2 ring-emerald-400",
+  GEMINI: "border-blue-500 bg-blue-100 ring-2 ring-blue-400",
+};
 
 export default function WorkflowDetailPage() {
   const params = useParams<{ id: string }>();
@@ -17,6 +37,8 @@ export default function WorkflowDetailPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedProvider, setSelectedProvider] =
+    useState<AIProvider>("ANTHROPIC");
 
   const fetchWorkflow = useCallback(async () => {
     try {
@@ -41,12 +63,13 @@ export default function WorkflowDetailPage() {
     try {
       const res = await fetch(`/api/workflows/${params.id}/run`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: selectedProvider }),
       });
       if (!res.ok) {
         const data = await res.json();
         setError(data.error ?? "Execution failed");
       }
-      // Refresh to get updated status and execution
       await fetchWorkflow();
     } catch {
       setError("Network error. Please try again.");
@@ -92,9 +115,9 @@ export default function WorkflowDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold text-zinc-900">
               {workflow.title}
             </h1>
@@ -107,18 +130,9 @@ export default function WorkflowDetailPage() {
             </span>
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            onClick={handleRun}
-            isLoading={isRunning}
-            disabled={workflow.status === "RUNNING"}
-          >
-            {isRunning ? "Running…" : "Run Workflow"}
-          </Button>
-          <Button variant="danger" isLoading={isDeleting} onClick={handleDelete}>
-            Delete
-          </Button>
-        </div>
+        <Button variant="danger" isLoading={isDeleting} onClick={handleDelete}>
+          Delete
+        </Button>
       </div>
 
       {error && (
@@ -126,6 +140,46 @@ export default function WorkflowDetailPage() {
           {error}
         </div>
       )}
+
+      {/* LLM Selector + Run */}
+      <Card>
+        <CardBody>
+          <p className="text-sm font-medium text-zinc-700 mb-3">
+            Choose AI provider for this run
+          </p>
+          <div className="flex flex-wrap gap-3 mb-4">
+            {PROVIDERS.map((provider) => (
+              <button
+                key={provider}
+                onClick={() => setSelectedProvider(provider)}
+                className={`flex flex-col items-start rounded-xl border px-4 py-3 text-left transition-all cursor-pointer min-w-[160px] ${
+                  selectedProvider === provider
+                    ? PROVIDER_SELECTED[provider]
+                    : PROVIDER_COLORS[provider] +
+                      " hover:opacity-80"
+                }`}
+              >
+                <span className="text-sm font-semibold">
+                  {AI_PROVIDER_LABELS[provider]}
+                </span>
+                <span className="text-xs opacity-70 mt-0.5">
+                  {AI_PROVIDER_MODELS[provider]}
+                </span>
+              </button>
+            ))}
+          </div>
+          <Button
+            onClick={handleRun}
+            isLoading={isRunning}
+            disabled={workflow.status === "RUNNING"}
+            size="lg"
+          >
+            {isRunning
+              ? `Running with ${AI_PROVIDER_LABELS[selectedProvider]}…`
+              : `Run with ${AI_PROVIDER_LABELS[selectedProvider]}`}
+          </Button>
+        </CardBody>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Input */}
@@ -154,7 +208,7 @@ export default function WorkflowDetailPage() {
               </p>
             ) : (
               <p className="text-sm text-zinc-400">
-                No output yet. Click &ldquo;Run Workflow&rdquo; to generate one.
+                No output yet. Select a provider and click &ldquo;Run&rdquo;.
               </p>
             )}
           </CardBody>

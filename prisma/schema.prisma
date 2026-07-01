@@ -28,6 +28,12 @@ enum ExecutionStatus {
   FAILED
 }
 
+enum AIProvider {
+  ANTHROPIC
+  OPENAI
+  GEMINI
+}
+
 model Workflow {
   id           String         @id @default(cuid())
   title        String
@@ -50,6 +56,7 @@ model WorkflowExecution {
   input        String          @db.Text
   output       String?         @db.Text
   status       ExecutionStatus
+  provider     AIProvider      @default(ANTHROPIC)
   errorMessage String?
   startedAt    DateTime
   completedAt  DateTime?

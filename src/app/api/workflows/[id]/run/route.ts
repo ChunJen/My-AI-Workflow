@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { runWorkflow } from "@/lib/ai";
+import { runWorkflow, type AIProvider } from "@/lib/ai";
+import { RunWorkflowSchema } from "@/lib/validations";
 import type { WorkflowType } from "@/types/workflow";
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
@@ -14,26 +15,31 @@ export async function POST(
     return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
   }
 
-  // Record start of execution
+  const body = await request.json().catch(() => ({}));
+  const { provider } = RunWorkflowSchema.parse(body);
+
   const execution = await prisma.workflowExecution.create({
     data: {
       workflowId: id,
       input: workflow.input,
       status: "RUNNING",
+      provider: provider as AIProvider,
       startedAt: new Date(),
     },
   });
 
-  // Mark workflow as running
   await prisma.workflow.update({
     where: { id },
     data: { status: "RUNNING" },
   });
 
   try {
-    const output = await runWorkflow(workflow.type as WorkflowType, workflow.input);
+    const output = await runWorkflow(
+      workflow.type as WorkflowType,
+      workflow.input,
+      provider as AIProvider
+    );
 
-    // Update execution and workflow on success
     const [updatedExecution] = await prisma.$transaction([
       prisma.workflowExecution.update({
         where: { id: execution.id },
@@ -50,15 +56,10 @@ export async function POST(
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
 
-    // Update execution and workflow on failure
     const [updatedExecution] = await prisma.$transaction([
       prisma.workflowExecution.update({
         where: { id: execution.id },
-        data: {
-          status: "FAILED",
-          errorMessage,
-          completedAt: new Date(),
-        },
+        data: { status: "FAILED", errorMessage, completedAt: new Date() },
       }),
       prisma.workflow.update({
         where: { id },
