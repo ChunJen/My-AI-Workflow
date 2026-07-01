@@ -54,8 +54,21 @@ export default function WorkflowDetailPage() {
   }, [params.id]);
 
   useEffect(() => {
-    fetchWorkflow();
-  }, [fetchWorkflow]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/workflows/${params.id}`);
+        if (!res.ok) throw new Error("Workflow not found");
+        const data = await res.json();
+        if (!cancelled) setWorkflow(data.workflow);
+      } catch {
+        if (!cancelled) setError("Failed to load workflow.");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [params.id]);
 
   async function handleRun() {
     setIsRunning(true);

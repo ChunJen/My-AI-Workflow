@@ -18,36 +18,59 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   const { provider } = RunWorkflowSchema.parse(body);
 
+  // Create execution in PENDING state
   const execution = await prisma.workflowExecution.create({
     data: {
       workflowId: id,
       input: workflow.input,
-      status: "RUNNING",
+      inputSnapshot: workflow.input,
+      status: "PENDING",
       provider: provider as AIProvider,
-      startedAt: new Date(),
+      triggerType: "MANUAL",
     },
   });
 
-  await prisma.workflow.update({
-    where: { id },
-    data: { status: "RUNNING" },
-  });
+  // Transition to RUNNING
+  const startedAt = new Date();
+  await prisma.$transaction([
+    prisma.workflowExecution.update({
+      where: { id: execution.id },
+      data: { status: "RUNNING", startedAt },
+    }),
+    prisma.workflow.update({
+      where: { id },
+      data: { status: "RUNNING" },
+    }),
+  ]);
 
   try {
-    const output = await runWorkflow(
+    const result = await runWorkflow(
       workflow.type as WorkflowType,
       workflow.input,
       provider as AIProvider
     );
 
+    const completedAt = new Date();
+    const durationMs = completedAt.getTime() - startedAt.getTime();
+
     const [updatedExecution] = await prisma.$transaction([
       prisma.workflowExecution.update({
         where: { id: execution.id },
-        data: { output, status: "COMPLETED", completedAt: new Date() },
+        data: {
+          output: result.output,
+          status: "COMPLETED",
+          model: result.model,
+          completedAt,
+          durationMs,
+          inputTokens: result.usage?.inputTokens ?? null,
+          outputTokens: result.usage?.outputTokens ?? null,
+          totalTokens: result.usage?.totalTokens ?? null,
+          estimatedCostUsd: result.estimatedCostUsd ?? null,
+        },
       }),
       prisma.workflow.update({
         where: { id },
-        data: { latestOutput: output, status: "COMPLETED" },
+        data: { latestOutput: result.output, status: "COMPLETED" },
       }),
     ]);
 
@@ -56,10 +79,13 @@ export async function POST(
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
 
+    const completedAt = new Date();
+    const durationMs = completedAt.getTime() - startedAt.getTime();
+
     const [updatedExecution] = await prisma.$transaction([
       prisma.workflowExecution.update({
         where: { id: execution.id },
-        data: { status: "FAILED", errorMessage, completedAt: new Date() },
+        data: { status: "FAILED", errorMessage, completedAt, durationMs },
       }),
       prisma.workflow.update({
         where: { id },

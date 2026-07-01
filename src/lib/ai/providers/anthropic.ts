@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { estimateCost } from "../costs";
+import type { AIProviderResult } from "../types";
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY ?? process.env.AI_API_KEY,
@@ -7,7 +9,7 @@ const client = new Anthropic({
 export async function callAI(
   systemPrompt: string,
   userMessage: string
-): Promise<string> {
+): Promise<AIProviderResult> {
   const model = process.env.AI_MODEL ?? "claude-sonnet-4-6";
 
   const message = await client.messages.create({
@@ -21,5 +23,18 @@ export async function callAI(
   if (content.type !== "text") {
     throw new Error("Unexpected response type from Anthropic");
   }
-  return content.text;
+
+  const inputTokens = message.usage.input_tokens;
+  const outputTokens = message.usage.output_tokens;
+
+  return {
+    output: content.text,
+    model,
+    usage: {
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+    },
+    estimatedCostUsd: estimateCost(model, inputTokens, outputTokens),
+  };
 }

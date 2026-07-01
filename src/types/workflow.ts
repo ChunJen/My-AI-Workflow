@@ -6,7 +6,18 @@ export type WorkflowType =
   | "MEETING_NOTES_EXTRACTION";
 
 export type WorkflowStatus = "DRAFT" | "RUNNING" | "COMPLETED" | "FAILED";
-export type ExecutionStatus = "RUNNING" | "COMPLETED" | "FAILED";
+
+export type ExecutionStatus =
+  | "PENDING"
+  | "QUEUED"
+  | "RUNNING"
+  | "COMPLETED"
+  | "FAILED"
+  | "CANCELLED"
+  | "RETRYING";
+
+export type TriggerType = "MANUAL" | "SCHEDULED" | "WEBHOOK" | "API";
+
 export type AIProvider = "ANTHROPIC" | "OPENAI" | "GEMINI";
 
 export const WORKFLOW_TYPE_LABELS: Record<WorkflowType, string> = {
@@ -48,8 +59,15 @@ export interface WorkflowExecution {
   output: string | null;
   status: ExecutionStatus;
   provider: AIProvider;
+  triggerType: TriggerType;
+  model: string | null;
   errorMessage: string | null;
-  startedAt: string;
+  durationMs: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  estimatedCostUsd: number | null;
+  startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
 }

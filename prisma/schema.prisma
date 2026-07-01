@@ -23,9 +23,20 @@ enum WorkflowStatus {
 }
 
 enum ExecutionStatus {
+  PENDING
+  QUEUED
   RUNNING
   COMPLETED
   FAILED
+  CANCELLED
+  RETRYING
+}
+
+enum TriggerType {
+  MANUAL
+  SCHEDULED
+  WEBHOOK
+  API
 }
 
 enum AIProvider {
@@ -50,17 +61,27 @@ model Workflow {
 }
 
 model WorkflowExecution {
-  id           String          @id @default(cuid())
-  workflowId   String
-  workflow     Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  input        String          @db.Text
-  output       String?         @db.Text
-  status       ExecutionStatus
-  provider     AIProvider      @default(ANTHROPIC)
-  errorMessage String?
-  startedAt    DateTime
-  completedAt  DateTime?
-  createdAt    DateTime        @default(now())
+  id               String          @id @default(cuid())
+  workflowId       String
+  workflow         Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  input            String          @db.Text
+  output           String?         @db.Text
+  status           ExecutionStatus @default(PENDING)
+  provider         AIProvider      @default(ANTHROPIC)
+  triggerType      TriggerType     @default(MANUAL)
+  model            String?
+  errorMessage     String?
+  durationMs       Int?
+  inputSnapshot    String?         @db.Text
+  inputTokens      Int?
+  outputTokens     Int?
+  totalTokens      Int?
+  estimatedCostUsd Float?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime        @default(now())
 
   @@index([workflowId])
+  @@index([status])
+  @@index([createdAt])
 }

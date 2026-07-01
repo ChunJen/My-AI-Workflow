@@ -1,6 +1,6 @@
-import type { WorkflowExecution } from "@/types/workflow";
+import type { WorkflowExecution, TriggerType } from "@/types/workflow";
 import { StatusBadge } from "@/components/StatusBadge";
-import { AI_PROVIDER_LABELS, AI_PROVIDER_MODELS } from "@/types/workflow";
+import { AI_PROVIDER_LABELS } from "@/types/workflow";
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleString(undefined, {
@@ -9,11 +9,28 @@ function formatDate(dateString: string) {
   });
 }
 
-function durationMs(start: string, end: string | null): string {
-  if (!end) return "—";
-  const ms = new Date(end).getTime() - new Date(start).getTime();
+function formatDuration(ms: number | null): string {
+  if (ms == null) return "—";
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
+
+function formatTokens(n: number | null): string {
+  if (n == null) return "—";
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
+function formatCost(usd: number | null): string {
+  if (usd == null) return "—";
+  if (usd < 0.001) return `$${(usd * 1000).toFixed(3)}m`;
+  return `$${usd.toFixed(4)}`;
+}
+
+const TRIGGER_LABELS: Record<TriggerType, string> = {
+  MANUAL: "Manual",
+  SCHEDULED: "Scheduled",
+  WEBHOOK: "Webhook",
+  API: "API",
+};
 
 interface ExecutionHistoryProps {
   executions: WorkflowExecution[];
@@ -33,17 +50,29 @@ export function ExecutionHistory({ executions }: ExecutionHistoryProps) {
       {executions.map((ex) => (
         <div key={ex.id} className="py-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               <StatusBadge status={ex.status} />
               <span className="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700">
-                {AI_PROVIDER_LABELS[ex.provider]} · {AI_PROVIDER_MODELS[ex.provider]}
+                {AI_PROVIDER_LABELS[ex.provider]}
+                {ex.model ? ` · ${ex.model}` : ""}
               </span>
-              <span className="text-sm text-zinc-500">
-                {formatDate(ex.createdAt)}
+              <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">
+                {TRIGGER_LABELS[ex.triggerType]}
               </span>
-              <span className="text-sm text-zinc-400">
-                {durationMs(ex.startedAt, ex.completedAt)}
-              </span>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-zinc-400">
+              <span title="Duration">{formatDuration(ex.durationMs)}</span>
+              {ex.totalTokens != null && (
+                <span title="Total tokens">
+                  {formatTokens(ex.totalTokens)} tokens
+                </span>
+              )}
+              {ex.estimatedCostUsd != null && (
+                <span title="Estimated cost">
+                  {formatCost(ex.estimatedCostUsd)}
+                </span>
+              )}
+              <span>{formatDate(ex.createdAt)}</span>
             </div>
           </div>
           {ex.status === "FAILED" && ex.errorMessage && (

@@ -3,14 +3,16 @@ import { getPromptTemplate } from "./prompts";
 import { callAI } from "./providers/anthropic";
 import { callOpenAI } from "./providers/openai";
 import { callGemini } from "./providers/gemini";
+import type { AIProviderResult } from "./types";
 
 export type AIProvider = "ANTHROPIC" | "OPENAI" | "GEMINI";
+export type { AIProviderResult };
 
 export async function runWorkflow(
   type: WorkflowType,
   input: string,
   provider: AIProvider = "ANTHROPIC"
-): Promise<string> {
+): Promise<AIProviderResult> {
   const template = getPromptTemplate(type);
 
   switch (provider) {
