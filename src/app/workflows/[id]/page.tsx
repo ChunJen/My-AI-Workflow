@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ExecutionHistory } from "@/components/ExecutionHistory";
 import { WorkflowSchedule } from "@/components/WorkflowSchedule";
 import { WorkflowSteps } from "@/components/WorkflowSteps";
+import { ProviderComparison } from "@/components/ProviderComparison";
 import {
   WORKFLOW_TYPE_LABELS,
   AI_PROVIDER_LABELS,
@@ -230,6 +231,9 @@ export default function WorkflowDetailPage() {
         </Card>
       </div>
 
+      {/* Provider Comparison */}
+      <ProviderComparison workflowId={params.id} onSetLatest={fetchWorkflow} />
+
       {/* Steps */}
       <WorkflowSteps workflowId={params.id} />
 
@@ -244,7 +248,7 @@ export default function WorkflowDetailPage() {
           </h2>
         </CardHeader>
         <CardBody>
-          <ExecutionHistory executions={workflow.executions ?? []} />
+          <ExecutionHistory executions={workflow.executions ?? []} onRefresh={fetchWorkflow} />
         </CardBody>
       </Card>
     </div>

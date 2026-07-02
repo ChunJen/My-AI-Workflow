@@ -63,24 +63,40 @@ model Workflow {
 }
 
 model WorkflowStep {
-  id           String   @id @default(cuid())
-  workflowId   String
-  order        Int
-  name         String
-  type         String
-  provider     String?
-  systemPrompt String   @db.Text
-  userPrompt   String   @db.Text
-  inputMapping String?
-  outputKey    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String   @id @default(cuid())
+  workflowId      String
+  order           Int
+  name            String
+  type            String
+  provider        String?
+  systemPrompt    String   @db.Text
+  userPrompt      String   @db.Text
+  inputMapping    String?
+  outputKey       String?
+  promptVersion   Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  workflow   Workflow               @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  executions WorkflowStepExecution[]
+  workflow        Workflow               @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  executions      WorkflowStepExecution[]
+  promptVersions  PromptVersion[]
 
   @@unique([workflowId, order])
   @@index([workflowId])
+}
+
+model PromptVersion {
+  id           String   @id @default(cuid())
+  stepId       String
+  version      Int
+  systemPrompt String   @db.Text
+  userPrompt   String   @db.Text
+  createdAt    DateTime @default(now())
+
+  step WorkflowStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  @@unique([stepId, version])
+  @@index([stepId])
 }
 
 model WorkflowSchedule {
@@ -131,6 +147,7 @@ model WorkflowStepExecution {
   status           String
   provider         String?
   model            String?
+  promptVersion    Int?
   input            String    @db.Text
   output           String?   @db.Text
   errorMessage     String?

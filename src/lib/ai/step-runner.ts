@@ -41,6 +41,7 @@ export async function runSteps(
     systemPrompt: string;
     userPrompt: string;
     outputKey: string | null;
+    promptVersion: number;
   }>,
   defaultProvider: StepProvider = "ANTHROPIC"
 ): Promise<StepRunSummary> {
@@ -67,6 +68,7 @@ export async function runSteps(
         stepId: step.id,
         status: "RUNNING",
         provider,
+        promptVersion: step.promptVersion,
         input: resolvedUser,
         startedAt: new Date(),
       },

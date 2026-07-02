@@ -14,6 +14,7 @@ interface WorkflowStep {
   systemPrompt: string;
   userPrompt: string;
   outputKey: string | null;
+  promptVersion: number;
 }
 
 const PROVIDERS: Array<{ value: string; label: string }> = [
@@ -202,6 +203,9 @@ export function WorkflowSteps({ workflowId }: { workflowId: string }) {
                         outputKey: {step.outputKey}
                       </p>
                     )}
+                    <p className="mt-0.5 text-xs text-zinc-400">
+                      Prompt v{step.promptVersion}
+                    </p>
                     <p className="mt-1 line-clamp-1 text-xs text-zinc-400">
                       {step.userPrompt}
                     </p>
