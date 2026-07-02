@@ -1,9 +1,4 @@
-export type WorkflowType =
-  | "TEXT_SUMMARIZATION"
-  | "PROFESSIONAL_REWRITE"
-  | "TASK_BREAKDOWN"
-  | "GITHUB_ISSUE_ANALYSIS"
-  | "MEETING_NOTES_EXTRACTION";
+export type WorkflowType = string;
 
 export type WorkflowStatus = "DRAFT" | "RUNNING" | "COMPLETED" | "FAILED";
 
@@ -20,13 +15,24 @@ export type TriggerType = "MANUAL" | "SCHEDULED" | "WEBHOOK" | "API";
 
 export type AIProvider = "ANTHROPIC" | "OPENAI" | "GEMINI";
 
-export const WORKFLOW_TYPE_LABELS: Record<WorkflowType, string> = {
+export const WORKFLOW_TYPE_LABELS: Record<string, string> = {
   TEXT_SUMMARIZATION: "Text Summarization",
   PROFESSIONAL_REWRITE: "Professional Rewrite",
   TASK_BREAKDOWN: "Task Breakdown",
   GITHUB_ISSUE_ANALYSIS: "GitHub Issue Analysis",
   MEETING_NOTES_EXTRACTION: "Meeting Notes Extraction",
 };
+
+export interface WorkflowTypeConfig {
+  id: string;
+  slug: string;
+  label: string;
+  description: string;
+  systemPrompt: string;
+  userPromptTemplate: string;
+  isEnabled: boolean;
+  isBuiltIn: boolean;
+}
 
 export const AI_PROVIDER_LABELS: Record<AIProvider, string> = {
   ANTHROPIC: "Anthropic Claude",

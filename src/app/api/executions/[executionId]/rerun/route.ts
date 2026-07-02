@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { runWorkflow, type AIProvider } from "@/lib/ai";
+import { runWorkflowByType, type AIProvider } from "@/lib/ai";
 import { runSteps } from "@/lib/ai/step-runner";
-import type { WorkflowType } from "@/types/workflow";
 
 type Params = { params: Promise<{ executionId: string }> };
 
@@ -61,7 +60,8 @@ export async function POST(_req: NextRequest, { params }: Params) {
       totalTokens = summary.totalTokens;
       estimatedCostUsd = summary.totalCostUsd;
     } else {
-      const result = await runWorkflow(workflow.type as WorkflowType, workflow.input, provider);
+      const typeConfig = await prisma.workflowTypeConfig.findUnique({ where: { slug: workflow.type } });
+      const result = await runWorkflowByType(workflow.type, workflow.input, provider, typeConfig ?? undefined);
       output = result.output;
       model = result.model;
       inputTokens = result.usage?.inputTokens ?? null;

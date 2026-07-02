@@ -1,11 +1,9 @@
-import type { WorkflowType } from "@/types/workflow";
-
 export interface PromptTemplate {
   system: string;
   user: (input: string) => string;
 }
 
-const templates: Record<WorkflowType, PromptTemplate> = {
+const templates: Record<string, PromptTemplate> = {
   TEXT_SUMMARIZATION: {
     system:
       "You are an expert summarizer. Produce clear, concise summaries that capture the key points and main ideas. Use bullet points for readability when appropriate.",
@@ -42,6 +40,17 @@ const templates: Record<WorkflowType, PromptTemplate> = {
   },
 };
 
-export function getPromptTemplate(type: WorkflowType): PromptTemplate {
+export function getPromptTemplate(type: string): PromptTemplate | undefined {
   return templates[type];
+}
+
+export function buildPromptFromConfig(
+  systemPrompt: string,
+  userPromptTemplate: string,
+  input: string
+): PromptTemplate {
+  return {
+    system: systemPrompt,
+    user: () => userPromptTemplate.replace(/\{\{input\}\}/g, input),
+  };
 }

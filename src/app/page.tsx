@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/StatusBadge";
-import { WORKFLOW_TYPE_LABELS, AI_PROVIDER_LABELS, type WorkflowType, type AIProvider } from "@/types/workflow";
+import { WORKFLOW_TYPE_LABELS, AI_PROVIDER_LABELS, type AIProvider } from "@/types/workflow";
 import type { WorkflowExecution, Workflow } from "@/generated/prisma/client";
 
 type RecentExecution = WorkflowExecution & {
@@ -310,7 +310,7 @@ export default async function DashboardPage() {
                         {typedEx.workflow.title}
                       </td>
                       <td className="px-6 py-3 text-zinc-500">
-                        {WORKFLOW_TYPE_LABELS[typedEx.workflow.type as WorkflowType]}
+                        {WORKFLOW_TYPE_LABELS[typedEx.workflow.type] ?? typedEx.workflow.type}
                       </td>
                       <td className="px-6 py-3">
                         <StatusBadge status={ex.status} />

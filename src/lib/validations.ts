@@ -1,12 +1,6 @@
 import { z } from "zod";
 
-export const WorkflowTypeSchema = z.enum([
-  "TEXT_SUMMARIZATION",
-  "PROFESSIONAL_REWRITE",
-  "TASK_BREAKDOWN",
-  "GITHUB_ISSUE_ANALYSIS",
-  "MEETING_NOTES_EXTRACTION",
-]);
+export const WorkflowTypeSchema = z.string().min(1, "Workflow type is required");
 
 export const AIProviderSchema = z.enum(["ANTHROPIC", "OPENAI", "GEMINI"]);
 

@@ -9,9 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ExecutionHistory } from "@/components/ExecutionHistory";
 import { WorkflowSchedule } from "@/components/WorkflowSchedule";
 import { WorkflowSteps } from "@/components/WorkflowSteps";
-import { ProviderComparison } from "@/components/ProviderComparison";
 import {
-  WORKFLOW_TYPE_LABELS,
   AI_PROVIDER_LABELS,
   AI_PROVIDER_MODELS,
   type Workflow,
@@ -140,7 +138,7 @@ export default function WorkflowDetailPage() {
             <StatusBadge status={workflow.status} />
           </div>
           <p className="mt-1 text-sm text-zinc-500">
-            {WORKFLOW_TYPE_LABELS[workflow.type]} ·{" "}
+            {workflow.type} ·{" "}
             <span>
               Created {new Date(workflow.createdAt).toLocaleDateString()}
             </span>
@@ -230,9 +228,6 @@ export default function WorkflowDetailPage() {
           </CardBody>
         </Card>
       </div>
-
-      {/* Provider Comparison */}
-      <ProviderComparison workflowId={params.id} onSetLatest={fetchWorkflow} />
 
       {/* Steps */}
       <WorkflowSteps workflowId={params.id} />

@@ -1,8 +1,8 @@
 import cron, { type ScheduledTask } from "node-cron";
 import { CronExpressionParser } from "cron-parser";
 import { prisma } from "@/lib/prisma";
-import { runWorkflow } from "@/lib/ai";
-import type { WorkflowType, AIProvider } from "@/types/workflow";
+import { runWorkflowByType } from "@/lib/ai";
+import type { AIProvider } from "@/types/workflow";
 
 export function getNextRunAt(
   cronExpression: string,
@@ -44,10 +44,12 @@ async function runScheduledWorkflow(workflowId: string, scheduleId: string) {
   await prisma.workflow.update({ where: { id: workflowId }, data: { status: "RUNNING" } });
 
   try {
-    const result = await runWorkflow(
-      workflow.type as WorkflowType,
+    const typeConfig = await prisma.workflowTypeConfig.findUnique({ where: { slug: workflow.type } });
+    const result = await runWorkflowByType(
+      workflow.type,
       workflow.input,
-      "ANTHROPIC" as AIProvider
+      "ANTHROPIC" as AIProvider,
+      typeConfig ?? undefined
     );
 
     const completedAt = new Date();

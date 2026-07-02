@@ -1,50 +1,201 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { WORKFLOW_TYPE_LABELS, type WorkflowType } from "@/types/workflow";
+import { AI_PROVIDER_LABELS, type WorkflowTypeConfig } from "@/types/workflow";
 
-const WORKFLOW_TYPES = Object.entries(WORKFLOW_TYPE_LABELS) as [
-  WorkflowType,
-  string,
-][];
+const STEP_PROVIDERS: Array<{ value: string; label: string }> = [
+  { value: "", label: "Default (from Run button)" },
+  { value: "ANTHROPIC", label: AI_PROVIDER_LABELS["ANTHROPIC"] },
+  { value: "OPENAI", label: AI_PROVIDER_LABELS["OPENAI"] },
+  { value: "GEMINI", label: AI_PROVIDER_LABELS["GEMINI"] },
+];
 
-const TYPE_DESCRIPTIONS: Record<WorkflowType, string> = {
-  TEXT_SUMMARIZATION: "Condense long text into clear, structured summaries.",
-  PROFESSIONAL_REWRITE:
-    "Polish informal text into professional business language.",
-  TASK_BREAKDOWN:
-    "Break a project or request into prioritised, actionable tasks.",
-  GITHUB_ISSUE_ANALYSIS:
-    "Triage a GitHub issue — severity, affected area, next actions.",
-  MEETING_NOTES_EXTRACTION:
-    "Extract decisions, action items, and follow-ups from meeting notes.",
+const TEMPLATE_HINTS = ["{{workflow.input}}", "{{latestOutput}}", "{{steps.<outputKey>.output}}"];
+
+interface DraftStep {
+  name: string;
+  type: string;
+  provider: string;
+  systemPrompt: string;
+  userPrompt: string;
+  outputKey: string;
+}
+
+const EMPTY_STEP: DraftStep = {
+  name: "",
+  type: "custom",
+  provider: "",
+  systemPrompt: "",
+  userPrompt: "{{workflow.input}}",
+  outputKey: "",
 };
+
+function StepForm({
+  step,
+  order,
+  onChange,
+  onRemove,
+}: {
+  step: DraftStep;
+  order: number;
+  onChange: (s: DraftStep) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-zinc-200 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-900 text-xs font-bold text-white">
+            {order}
+          </span>
+          <p className="text-sm font-semibold text-zinc-800">
+            {step.name || `Step ${order}`}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-xs text-zinc-400 hover:text-red-600 transition-colors"
+        >
+          Remove
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-1">
+        {TEMPLATE_HINTS.map((h) => (
+          <span key={h} className="rounded bg-zinc-100 px-2 py-0.5 font-mono text-xs text-zinc-500">
+            {h}
+          </span>
+        ))}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="block text-xs font-medium text-zinc-700 mb-1">Name *</label>
+          <input
+            type="text"
+            value={step.name}
+            onChange={(e) => onChange({ ...step, name: e.target.value })}
+            placeholder="e.g. Extract Summary"
+            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-zinc-700 mb-1">Output Key</label>
+          <input
+            type="text"
+            value={step.outputKey}
+            onChange={(e) => onChange({ ...step, outputKey: e.target.value })}
+            placeholder="e.g. step_1"
+            className="w-full rounded-lg border border-zinc-200 px-3 py-2 font-mono text-sm focus:border-zinc-500 focus:outline-none"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-zinc-700 mb-1">Provider Override</label>
+        <select
+          value={step.provider}
+          onChange={(e) => onChange({ ...step, provider: e.target.value })}
+          className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
+        >
+          {STEP_PROVIDERS.map((p) => (
+            <option key={p.value} value={p.value}>{p.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-zinc-700 mb-1">System Prompt *</label>
+        <textarea
+          value={step.systemPrompt}
+          onChange={(e) => onChange({ ...step, systemPrompt: e.target.value })}
+          rows={2}
+          placeholder="You are an expert at..."
+          className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-zinc-700 mb-1">
+          User Prompt *{" "}
+          <span className="font-normal text-zinc-400">(use template variables above)</span>
+        </label>
+        <textarea
+          value={step.userPrompt}
+          onChange={(e) => onChange({ ...step, userPrompt: e.target.value })}
+          rows={3}
+          className="w-full rounded-lg border border-zinc-200 px-3 py-2 font-mono text-sm focus:border-zinc-500 focus:outline-none"
+        />
+      </div>
+    </div>
+  );
+}
 
 export default function NewWorkflowPage() {
   const router = useRouter();
+  const [typeConfigs, setTypeConfigs] = useState<WorkflowTypeConfig[]>([]);
   const [form, setForm] = useState({
     title: "",
-    type: "TEXT_SUMMARIZATION" as WorkflowType,
+    type: "",
     input: "",
   });
+  const [steps, setSteps] = useState<DraftStep[]>([]);
+  const [stepError, setStepError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/workflow-types")
+      .then((r) => r.json())
+      .then(({ configs }) => {
+        const enabled: WorkflowTypeConfig[] = (configs ?? []).filter((c: WorkflowTypeConfig) => c.isEnabled);
+        setTypeConfigs(enabled);
+        if (enabled.length > 0 && !form.type) {
+          setForm((f) => ({ ...f, type: enabled[0].slug }));
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const selectedConfig = typeConfigs.find((c) => c.slug === form.type);
+
+  function addStep() {
+    setSteps((prev) => [...prev, { ...EMPTY_STEP }]);
+  }
+
+  function updateStep(index: number, s: DraftStep) {
+    setSteps((prev) => prev.map((existing, i) => (i === index ? s : existing)));
+  }
+
+  function removeStep(index: number) {
+    setSteps((prev) => prev.filter((_, i) => i !== index));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrors({});
-    setIsSubmitting(true);
+    setStepError(null);
 
+    for (let i = 0; i < steps.length; i++) {
+      const s = steps[i];
+      if (!s.name || !s.systemPrompt || !s.userPrompt) {
+        setStepError(`Step ${i + 1} is missing required fields (Name, System Prompt, User Prompt).`);
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
     try {
       const res = await fetch("/api/workflows", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-
       const data = await res.json();
 
       if (!res.ok) {
@@ -62,7 +213,26 @@ export default function NewWorkflowPage() {
         return;
       }
 
-      router.push(`/workflows/${data.workflow.id}`);
+      const workflowId: string = data.workflow.id;
+
+      for (const step of steps) {
+        const stepRes = await fetch(`/api/workflows/${workflowId}/steps`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...step,
+            provider: step.provider || null,
+            outputKey: step.outputKey || null,
+          }),
+        });
+        if (!stepRes.ok) {
+          const stepData = await stepRes.json();
+          setStepError(stepData.error ?? "Failed to create step");
+          return;
+        }
+      }
+
+      router.push(`/workflows/${workflowId}`);
     } catch {
       setErrors({ _form: "Network error. Please try again." });
     } finally {
@@ -75,29 +245,23 @@ export default function NewWorkflowPage() {
       <div>
         <h1 className="text-2xl font-bold text-zinc-900">New Workflow</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Create an AI automation workflow and run it immediately.
+          Create an AI automation workflow and optionally define multi-step execution.
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <h2 className="text-base font-semibold text-zinc-900">
-            Workflow details
-          </h2>
-        </CardHeader>
-        <CardBody>
-          <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Workflow details */}
+        <Card>
+          <CardHeader>
+            <h2 className="text-base font-semibold text-zinc-900">Workflow details</h2>
+          </CardHeader>
+          <CardBody className="space-y-5">
             {errors._form && (
-              <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-                {errors._form}
-              </p>
+              <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{errors._form}</p>
             )}
 
-            {/* Title */}
             <div>
-              <label className="block text-sm font-medium text-zinc-700">
-                Workflow title
-              </label>
+              <label className="block text-sm font-medium text-zinc-700">Workflow title</label>
               <input
                 type="text"
                 value={form.title}
@@ -105,43 +269,32 @@ export default function NewWorkflowPage() {
                 placeholder="e.g. Summarize Q3 report"
                 className="mt-1 block w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
-              {errors.title && (
-                <p className="mt-1 text-xs text-red-600">{errors.title}</p>
-              )}
+              {errors.title && <p className="mt-1 text-xs text-red-600">{errors.title}</p>}
             </div>
 
-            {/* Type */}
             <div>
-              <label className="block text-sm font-medium text-zinc-700">
-                Workflow type
-              </label>
+              <label className="block text-sm font-medium text-zinc-700">Workflow type</label>
               <select
                 value={form.type}
-                onChange={(e) =>
-                  setForm({ ...form, type: e.target.value as WorkflowType })
-                }
+                onChange={(e) => setForm({ ...form, type: e.target.value })}
                 className="mt-1 block w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               >
-                {WORKFLOW_TYPES.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
+                {typeConfigs.map((c) => (
+                  <option key={c.slug} value={c.slug}>{c.label}</option>
                 ))}
               </select>
-              <p className="mt-1.5 text-xs text-zinc-500">
-                {TYPE_DESCRIPTIONS[form.type]}
-              </p>
+              {selectedConfig && (
+                <p className="mt-1.5 text-xs text-zinc-500">{selectedConfig.description}</p>
+              )}
+              {errors.type && <p className="mt-1 text-xs text-red-600">{errors.type}</p>}
             </div>
 
-            {/* Input */}
             <div>
-              <label className="block text-sm font-medium text-zinc-700">
-                Input text
-              </label>
+              <label className="block text-sm font-medium text-zinc-700">Input text</label>
               <textarea
                 value={form.input}
                 onChange={(e) => setForm({ ...form, input: e.target.value })}
-                rows={8}
+                rows={6}
                 placeholder="Paste the text you want the AI to process..."
                 className="mt-1 block w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400"
               />
@@ -151,27 +304,56 @@ export default function NewWorkflowPage() {
                 ) : (
                   <span />
                 )}
-                <p className="text-xs text-zinc-400">
-                  {form.input.length} / 10,000
-                </p>
+                <p className="text-xs text-zinc-400">{form.input.length} / 10,000</p>
               </div>
             </div>
+          </CardBody>
+        </Card>
 
-            <div className="flex gap-3 pt-2">
-              <Button type="submit" isLoading={isSubmitting}>
-                Create Workflow
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => router.back()}
-              >
-                Cancel
+        {/* Steps */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-900">Workflow Steps</h2>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  {steps.length === 0
+                    ? "Optional — skip to use type-based default prompt."
+                    : `${steps.length} step${steps.length > 1 ? "s" : ""} will run in order.`}
+                </p>
+              </div>
+              <Button type="button" size="sm" variant="secondary" onClick={addStep}>
+                + Add Step
               </Button>
             </div>
-          </form>
-        </CardBody>
-      </Card>
+          </CardHeader>
+          {(steps.length > 0 || stepError) && (
+            <CardBody className="space-y-4">
+              {stepError && (
+                <p className="rounded bg-red-50 px-3 py-2 text-xs text-red-700">{stepError}</p>
+              )}
+              {steps.map((step, i) => (
+                <StepForm
+                  key={i}
+                  step={step}
+                  order={i + 1}
+                  onChange={(s) => updateStep(i, s)}
+                  onRemove={() => removeStep(i)}
+                />
+              ))}
+            </CardBody>
+          )}
+        </Card>
+
+        <div className="flex gap-3">
+          <Button type="submit" isLoading={isSubmitting}>
+            Create Workflow
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => router.back()}>
+            Cancel
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

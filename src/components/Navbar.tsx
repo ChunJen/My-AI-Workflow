@@ -26,6 +26,12 @@ export function Navbar() {
             Workflows
           </Link>
           <Link
+            href="/admin"
+            className="text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors"
+          >
+            Admin
+          </Link>
+          <Link
             href="/workflows/new"
             className="inline-flex items-center rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 transition-colors"
           >

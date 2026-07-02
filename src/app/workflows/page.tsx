@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/StatusBadge";
-import { WORKFLOW_TYPE_LABELS, type WorkflowType } from "@/types/workflow";
+import { WORKFLOW_TYPE_LABELS } from "@/types/workflow";
 import type { Workflow } from "@/generated/prisma/client";
 
 type WorkflowWithCount = Workflow & { _count: { executions: number } };
@@ -67,7 +67,7 @@ export default async function WorkflowsPage() {
                     {wf.title}
                   </td>
                   <td className="px-6 py-4 text-zinc-500">
-                    {WORKFLOW_TYPE_LABELS[wf.type as WorkflowType]}
+                    {WORKFLOW_TYPE_LABELS[wf.type] ?? wf.type}
                   </td>
                   <td className="px-6 py-4">
                     <StatusBadge status={wf.status} />

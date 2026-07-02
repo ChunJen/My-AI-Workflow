@@ -7,14 +7,6 @@ datasource db {
   provider = "postgresql"
 }
 
-enum WorkflowType {
-  TEXT_SUMMARIZATION
-  PROFESSIONAL_REWRITE
-  TASK_BREAKDOWN
-  GITHUB_ISSUE_ANALYSIS
-  MEETING_NOTES_EXTRACTION
-}
-
 enum WorkflowStatus {
   DRAFT
   RUNNING
@@ -45,10 +37,23 @@ enum AIProvider {
   GEMINI
 }
 
+model WorkflowTypeConfig {
+  id                 String   @id @default(cuid())
+  slug               String   @unique
+  label              String
+  description        String
+  systemPrompt       String   @db.Text
+  userPromptTemplate String   @db.Text
+  isEnabled          Boolean  @default(true)
+  isBuiltIn          Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
 model Workflow {
   id           String         @id @default(cuid())
   title        String
-  type         WorkflowType
+  type         String
   input        String         @db.Text
   latestOutput String?        @db.Text
   status       WorkflowStatus @default(DRAFT)

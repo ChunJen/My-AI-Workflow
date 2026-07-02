@@ -13,13 +13,73 @@ interface Schedule {
   nextRunAt: string | null;
 }
 
-const CRON_PRESETS = [
-  { label: "Every hour", value: "0 * * * *" },
-  { label: "Every 6 hours", value: "0 */6 * * *" },
-  { label: "Daily at midnight", value: "0 0 * * *" },
-  { label: "Daily at 9am", value: "0 9 * * *" },
-  { label: "Weekly (Mon 9am)", value: "0 9 * * 1" },
-];
+type Frequency = "every" | "daily" | "weekly";
+type EveryUnit = "minutes" | "hours";
+
+const EVERY_MINUTE_OPTIONS = [15, 30];
+const EVERY_HOUR_OPTIONS = [1, 2, 4, 6, 12];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const MINUTES = [0, 5, 10, 15, 20, 30, 45];
+
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function buildCron(
+  frequency: Frequency,
+  everyUnit: EveryUnit,
+  everyValue: number,
+  hour: number,
+  minute: number,
+  weekday: number
+): string {
+  if (frequency === "every") {
+    if (everyUnit === "minutes") return `*/${everyValue} * * * *`;
+    return `0 */${everyValue} * * *`;
+  }
+  if (frequency === "daily") return `${minute} ${hour} * * *`;
+  return `${minute} ${hour} * * ${weekday}`;
+}
+
+function parseCron(expr: string): {
+  frequency: Frequency;
+  everyUnit: EveryUnit;
+  everyValue: number;
+  hour: number;
+  minute: number;
+  weekday: number;
+} {
+  const defaults = { frequency: "daily" as Frequency, everyUnit: "hours" as EveryUnit, everyValue: 1, hour: 9, minute: 0, weekday: 1 };
+  try {
+    const parts = expr.trim().split(/\s+/);
+    if (parts.length !== 5) return defaults;
+    const [min, hr, , , dow] = parts;
+    if (min.startsWith("*/") && hr === "*") {
+      return { ...defaults, frequency: "every", everyUnit: "minutes", everyValue: parseInt(min.slice(2)) };
+    }
+    if (min === "0" && hr.startsWith("*/")) {
+      return { ...defaults, frequency: "every", everyUnit: "hours", everyValue: parseInt(hr.slice(2)) };
+    }
+    if (dow !== "*") {
+      return { ...defaults, frequency: "weekly", hour: parseInt(hr), minute: parseInt(min), weekday: parseInt(dow) };
+    }
+    return { ...defaults, frequency: "daily", hour: parseInt(hr), minute: parseInt(min) };
+  } catch {
+    return defaults;
+  }
+}
+
+function describeSchedule(freq: Frequency, everyUnit: EveryUnit, everyValue: number, hour: number, minute: number, weekday: number): string {
+  if (freq === "every") {
+    return everyUnit === "minutes"
+      ? `Every ${everyValue} minutes`
+      : everyValue === 1 ? "Every hour" : `Every ${everyValue} hours`;
+  }
+  const time = `${pad(hour)}:${pad(minute)}`;
+  if (freq === "daily") return `Daily at ${time}`;
+  return `Every ${WEEKDAYS[weekday]} at ${time}`;
+}
 
 function formatDateTime(dt: string | null) {
   if (!dt) return "—";
@@ -38,8 +98,12 @@ export function WorkflowSchedule({ workflowId }: { workflowId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [cronExpression, setCronExpression] = useState("0 9 * * *");
-  const [timezone, setTimezone] = useState("Asia/Taipei");
+  const [frequency, setFrequency] = useState<Frequency>("daily");
+  const [everyUnit, setEveryUnit] = useState<EveryUnit>("hours");
+  const [everyValue, setEveryValue] = useState(1);
+  const [hour, setHour] = useState(9);
+  const [minute, setMinute] = useState(0);
+  const [weekday, setWeekday] = useState(1);
   const [isActive, setIsActive] = useState(true);
 
   useEffect(() => {
@@ -48,14 +112,21 @@ export function WorkflowSchedule({ workflowId }: { workflowId: string }) {
       .then(({ schedule: s }) => {
         if (s) {
           setSchedule(s);
-          setCronExpression(s.cronExpression);
-          setTimezone(s.timezone);
           setIsActive(s.isActive);
+          const parsed = parseCron(s.cronExpression);
+          setFrequency(parsed.frequency);
+          setEveryUnit(parsed.everyUnit);
+          setEveryValue(parsed.everyValue);
+          setHour(parsed.hour);
+          setMinute(parsed.minute);
+          setWeekday(parsed.weekday);
         }
       })
       .catch(() => setError("Failed to load schedule"))
       .finally(() => setIsLoading(false));
   }, [workflowId]);
+
+  const cronExpression = buildCron(frequency, everyUnit, everyValue, hour, minute, weekday);
 
   async function handleSave() {
     setIsSaving(true);
@@ -66,7 +137,7 @@ export function WorkflowSchedule({ workflowId }: { workflowId: string }) {
       const res = await fetch(`/api/workflows/${workflowId}/schedule`, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cronExpression, timezone, isActive }),
+        body: JSON.stringify({ cronExpression, timezone: "Asia/Taipei", isActive }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -88,11 +159,13 @@ export function WorkflowSchedule({ workflowId }: { workflowId: string }) {
     try {
       await fetch(`/api/workflows/${workflowId}/schedule`, { method: "DELETE" });
       setSchedule(null);
-      setCronExpression("0 9 * * *");
+      setFrequency("daily");
+      setHour(9);
+      setMinute(0);
       setIsActive(true);
       setSuccess("Schedule deleted.");
     } catch {
-      setError("Failed to delete schedule");
+      setError("Failed to delete");
     } finally {
       setIsDeleting(false);
     }
@@ -106,95 +179,131 @@ export function WorkflowSchedule({ workflowId }: { workflowId: string }) {
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-zinc-900">Schedule</h2>
           {schedule && (
-            <span
-              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                schedule.isActive
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-zinc-100 text-zinc-500"
-              }`}
-            >
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${schedule.isActive ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-500"}`}>
               {schedule.isActive ? "Active" : "Inactive"}
             </span>
           )}
         </div>
       </CardHeader>
-      <CardBody className="space-y-4">
+      <CardBody className="space-y-5">
+        {/* Last / Next run */}
         {schedule && (
           <div className="grid grid-cols-2 gap-3 rounded-lg bg-zinc-50 p-3 text-sm">
             <div>
               <p className="text-xs text-zinc-500">Last Run</p>
-              <p className="font-medium text-zinc-800">
-                {formatDateTime(schedule.lastRunAt)}
-              </p>
+              <p className="font-medium text-zinc-800">{formatDateTime(schedule.lastRunAt)}</p>
             </div>
             <div>
               <p className="text-xs text-zinc-500">Next Run</p>
-              <p className="font-medium text-zinc-800">
-                {formatDateTime(schedule.nextRunAt)}
-              </p>
+              <p className="font-medium text-zinc-800">{formatDateTime(schedule.nextRunAt)}</p>
             </div>
           </div>
         )}
 
-        {/* Presets */}
+        {/* Frequency tabs */}
         <div>
-          <p className="mb-2 text-xs font-medium text-zinc-500 uppercase tracking-wide">
-            Presets
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {CRON_PRESETS.map((p) => (
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">Frequency</p>
+          <div className="flex rounded-lg border border-zinc-200 p-0.5 w-fit gap-0.5">
+            {(["every", "daily", "weekly"] as Frequency[]).map((f) => (
               <button
-                key={p.value}
-                onClick={() => setCronExpression(p.value)}
-                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  cronExpression === p.value
-                    ? "border-zinc-900 bg-zinc-900 text-white"
-                    : "border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+                key={f}
+                onClick={() => setFrequency(f)}
+                className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors capitalize ${
+                  frequency === f ? "bg-zinc-900 text-white" : "text-zinc-500 hover:text-zinc-800"
                 }`}
               >
-                {p.label}
+                {f}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Cron Expression */}
-        <div>
-          <label className="block text-xs font-medium text-zinc-700 mb-1">
-            Cron Expression
-          </label>
-          <input
-            type="text"
-            value={cronExpression}
-            onChange={(e) => setCronExpression(e.target.value)}
-            placeholder="0 9 * * *"
-            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm font-mono text-zinc-800 focus:border-zinc-500 focus:outline-none"
-          />
-          <p className="mt-1 text-xs text-zinc-400">
-            Format: minute hour day month weekday &nbsp;·&nbsp;
-            <a
-              href="https://crontab.guru"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-zinc-500 underline"
-            >
-              crontab.guru
-            </a>
-          </p>
-        </div>
+        {/* Every options */}
+        {frequency === "every" && (
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              {(["minutes", "hours"] as EveryUnit[]).map((u) => (
+                <button
+                  key={u}
+                  onClick={() => { setEveryUnit(u); setEveryValue(u === "minutes" ? 15 : 1); }}
+                  className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors capitalize ${
+                    everyUnit === u ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 text-zinc-500 hover:border-zinc-300"
+                  }`}
+                >
+                  {u}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(everyUnit === "minutes" ? EVERY_MINUTE_OPTIONS : EVERY_HOUR_OPTIONS).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setEveryValue(v)}
+                  className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    everyValue === v ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 text-zinc-500 hover:border-zinc-300"
+                  }`}
+                >
+                  {everyUnit === "minutes" ? `${v} min` : v === 1 ? "1 hour" : `${v} hours`}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-        {/* Timezone */}
-        <div>
-          <label className="block text-xs font-medium text-zinc-700 mb-1">
-            Timezone
-          </label>
-          <input
-            type="text"
-            value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
-            placeholder="Asia/Taipei"
-            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800 focus:border-zinc-500 focus:outline-none"
-          />
+        {/* Daily / Weekly time picker */}
+        {(frequency === "daily" || frequency === "weekly") && (
+          <div className="space-y-3">
+            {frequency === "weekly" && (
+              <div>
+                <p className="mb-2 text-xs font-medium text-zinc-500">Day of Week</p>
+                <div className="flex gap-2 flex-wrap">
+                  {WEEKDAYS.map((d, i) => (
+                    <button
+                      key={d}
+                      onClick={() => setWeekday(i)}
+                      className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                        weekday === i ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 text-zinc-500 hover:border-zinc-300"
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div>
+              <p className="mb-2 text-xs font-medium text-zinc-500">Time (Asia/Taipei)</p>
+              <div className="flex items-center gap-2">
+                <select
+                  value={hour}
+                  onChange={(e) => setHour(Number(e.target.value))}
+                  className="rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
+                >
+                  {HOURS.map((h) => (
+                    <option key={h} value={h}>{pad(h)}:00</option>
+                  ))}
+                </select>
+                <span className="text-zinc-400">:</span>
+                <select
+                  value={minute}
+                  onChange={(e) => setMinute(Number(e.target.value))}
+                  className="rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none"
+                >
+                  {MINUTES.map((m) => (
+                    <option key={m} value={m}>{pad(m)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Summary + cron preview */}
+        <div className="rounded-lg bg-zinc-50 px-4 py-3">
+          <p className="text-sm font-medium text-zinc-800">
+            {describeSchedule(frequency, everyUnit, everyValue, hour, minute, weekday)}
+          </p>
+          <p className="mt-0.5 font-mono text-xs text-zinc-400">{cronExpression}</p>
         </div>
 
         {/* Active toggle */}
@@ -203,29 +312,15 @@ export function WorkflowSchedule({ workflowId }: { workflowId: string }) {
             role="switch"
             aria-checked={isActive}
             onClick={() => setIsActive(!isActive)}
-            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-              isActive ? "bg-zinc-900" : "bg-zinc-200"
-            }`}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${isActive ? "bg-zinc-900" : "bg-zinc-200"}`}
           >
-            <span
-              className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${
-                isActive ? "translate-x-4" : "translate-x-0"
-              }`}
-            />
+            <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${isActive ? "translate-x-4" : "translate-x-0"}`} />
           </button>
-          <span className="text-sm text-zinc-700">
-            {isActive ? "Active" : "Inactive"}
-          </span>
+          <span className="text-sm text-zinc-700">{isActive ? "Active" : "Inactive"}</span>
         </div>
 
-        {error && (
-          <p className="rounded bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>
-        )}
-        {success && (
-          <p className="rounded bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-            {success}
-          </p>
-        )}
+        {error && <p className="rounded bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
+        {success && <p className="rounded bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{success}</p>}
 
         <div className="flex items-center gap-3">
           <Button onClick={handleSave} isLoading={isSaving}>
