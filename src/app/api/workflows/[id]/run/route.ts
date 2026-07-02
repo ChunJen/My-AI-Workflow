@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runWorkflow, type AIProvider } from "@/lib/ai";
+import { runSteps } from "@/lib/ai/step-runner";
 import { RunWorkflowSchema } from "@/lib/validations";
 import type { WorkflowType } from "@/types/workflow";
 
@@ -10,7 +11,12 @@ export async function POST(
 ) {
   const { id } = await params;
 
-  const workflow = await prisma.workflow.findUnique({ where: { id } });
+  const workflow = await prisma.workflow.findUnique({
+    where: { id },
+    include: {
+      steps: { orderBy: { order: "asc" } },
+    },
+  });
   if (!workflow) {
     return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
   }
@@ -18,7 +24,6 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   const { provider } = RunWorkflowSchema.parse(body);
 
-  // Create execution in PENDING state
   const execution = await prisma.workflowExecution.create({
     data: {
       workflowId: id,
@@ -30,7 +35,6 @@ export async function POST(
     },
   });
 
-  // Transition to RUNNING
   const startedAt = new Date();
   await prisma.$transaction([
     prisma.workflowExecution.update({
@@ -44,11 +48,40 @@ export async function POST(
   ]);
 
   try {
-    const result = await runWorkflow(
-      workflow.type as WorkflowType,
-      workflow.input,
-      provider as AIProvider
-    );
+    let output: string;
+    let inputTokens: number | null = null;
+    let outputTokens: number | null = null;
+    let totalTokens: number | null = null;
+    let estimatedCostUsd: number | null = null;
+    let model: string | null = null;
+
+    if (workflow.steps.length > 0) {
+      // Multi-step execution
+      const summary = await runSteps(
+        execution.id,
+        workflow.input,
+        workflow.steps,
+        provider as AIProvider
+      );
+      output = summary.finalOutput;
+      inputTokens = summary.totalInputTokens;
+      outputTokens = summary.totalOutputTokens;
+      totalTokens = summary.totalTokens;
+      estimatedCostUsd = summary.totalCostUsd;
+    } else {
+      // Single-step (type-based) execution
+      const result = await runWorkflow(
+        workflow.type as WorkflowType,
+        workflow.input,
+        provider as AIProvider
+      );
+      output = result.output;
+      model = result.model;
+      inputTokens = result.usage?.inputTokens ?? null;
+      outputTokens = result.usage?.outputTokens ?? null;
+      totalTokens = result.usage?.totalTokens ?? null;
+      estimatedCostUsd = result.estimatedCostUsd ?? null;
+    }
 
     const completedAt = new Date();
     const durationMs = completedAt.getTime() - startedAt.getTime();
@@ -57,20 +90,20 @@ export async function POST(
       prisma.workflowExecution.update({
         where: { id: execution.id },
         data: {
-          output: result.output,
+          output,
           status: "COMPLETED",
-          model: result.model,
+          model,
           completedAt,
           durationMs,
-          inputTokens: result.usage?.inputTokens ?? null,
-          outputTokens: result.usage?.outputTokens ?? null,
-          totalTokens: result.usage?.totalTokens ?? null,
-          estimatedCostUsd: result.estimatedCostUsd ?? null,
+          inputTokens,
+          outputTokens,
+          totalTokens,
+          estimatedCostUsd,
         },
       }),
       prisma.workflow.update({
         where: { id },
-        data: { latestOutput: result.output, status: "COMPLETED" },
+        data: { latestOutput: output, status: "COMPLETED" },
       }),
     ]);
 
@@ -78,7 +111,6 @@ export async function POST(
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-
     const completedAt = new Date();
     const durationMs = completedAt.getTime() - startedAt.getTime();
 

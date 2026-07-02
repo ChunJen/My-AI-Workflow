@@ -56,9 +56,31 @@ model Workflow {
   updatedAt    DateTime       @updatedAt
   executions   WorkflowExecution[]
   schedule     WorkflowSchedule?
+  steps        WorkflowStep[]
 
   @@index([status])
   @@index([createdAt])
+}
+
+model WorkflowStep {
+  id           String   @id @default(cuid())
+  workflowId   String
+  order        Int
+  name         String
+  type         String
+  provider     String?
+  systemPrompt String   @db.Text
+  userPrompt   String   @db.Text
+  inputMapping String?
+  outputKey    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workflow   Workflow               @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  executions WorkflowStepExecution[]
+
+  @@unique([workflowId, order])
+  @@index([workflowId])
 }
 
 model WorkflowSchedule {
@@ -95,8 +117,34 @@ model WorkflowExecution {
   startedAt        DateTime?
   completedAt      DateTime?
   createdAt        DateTime        @default(now())
+  stepExecutions   WorkflowStepExecution[]
 
   @@index([workflowId])
   @@index([status])
   @@index([createdAt])
+}
+
+model WorkflowStepExecution {
+  id               String    @id @default(cuid())
+  executionId      String
+  stepId           String
+  status           String
+  provider         String?
+  model            String?
+  input            String    @db.Text
+  output           String?   @db.Text
+  errorMessage     String?
+  inputTokens      Int?
+  outputTokens     Int?
+  totalTokens      Int?
+  estimatedCostUsd Float?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+
+  execution WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  step      WorkflowStep      @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+  @@index([stepId])
 }
