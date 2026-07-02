@@ -7,6 +7,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ExecutionHistory } from "@/components/ExecutionHistory";
+import { WorkflowSchedule } from "@/components/WorkflowSchedule";
 import {
   WORKFLOW_TYPE_LABELS,
   AI_PROVIDER_LABELS,
@@ -227,6 +228,9 @@ export default function WorkflowDetailPage() {
           </CardBody>
         </Card>
       </div>
+
+      {/* Schedule */}
+      <WorkflowSchedule workflowId={params.id} />
 
       {/* Execution History */}
       <Card>

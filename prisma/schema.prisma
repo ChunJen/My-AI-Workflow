@@ -55,9 +55,24 @@ model Workflow {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   executions   WorkflowExecution[]
+  schedule     WorkflowSchedule?
 
   @@index([status])
   @@index([createdAt])
+}
+
+model WorkflowSchedule {
+  id             String    @id @default(cuid())
+  workflowId     String    @unique
+  cronExpression String
+  timezone       String    @default("Asia/Taipei")
+  isActive       Boolean   @default(true)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 }
 
 model WorkflowExecution {
